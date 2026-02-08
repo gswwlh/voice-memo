@@ -352,10 +352,20 @@
     </div>
 
     <script>
-        // Supabase配置
-        const SUPABASE_URL = 'https://tweusnlqlgiiuchlfbdr.supabase.co';
-        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR3ZXVzbmxxbGdpaXVjaGxmYmRyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzNjkxMjksImV4cCI6MjA4NTk0NTEyOX0.3-JvqUMlHigtjwcGHZDdaOhvwq1dDLeoqn2A0gxXNPg';
-        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        // 等待Supabase库加载
+        let supabase = null;
+        
+        // 初始化Supabase
+        function initSupabase() {
+            if (window.supabase) {
+                const SUPABASE_URL = 'https://tweusnlqlgiiuchlfbdr.supabase.co';
+                const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR3ZXVzbmxxbGdpaXVjaGxmYmRyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzNjkxMjksImV4cCI6MjA4NTk0NTEyOX0.3-JvqUMlHigtjwcGHZDdaOhvwq1dDLeoqn2A0gxXNPg';
+                supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+                addDebugLog('✅ Supabase已连接');
+            } else {
+                addDebugLog('❌ Supabase库加载失败');
+            }
+        }
 
         // 语音识别
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -590,6 +600,11 @@
 
         // Supabase数据库操作
         async function saveMemo(memo) {
+            if (!supabase) {
+                addDebugLog('❌ Supabase未初始化');
+                return false;
+            }
+            
             try {
                 const { data, error } = await supabase
                     .from('voice_memos')
@@ -750,9 +765,12 @@
         }
 
         // 初始化
-        updateMemoCount();
-        renderMemos();
-        updateStats();
+        window.addEventListener('load', () => {
+            initSupabase();
+            updateMemoCount();
+            renderMemos();
+            updateStats();
+        });
     </script>
 </body>
 </html>
