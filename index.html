@@ -325,6 +325,10 @@
             <button class="action-button cancel-button" id="cancelBtn">❌ 取消</button>
         </div>
         <div class="memo-count" id="memoCount">已保存 0 条备忘录</div>
+        <div style="margin-top: 20px; padding: 15px; background: rgba(255,255,255,0.2); border-radius: 10px; font-size: 12px; color: white; text-align: left; max-height: 150px; overflow-y: auto;" id="debugLog">
+            <div style="font-weight: bold; margin-bottom: 5px;">📋 调试信息：</div>
+            <div id="debugContent">等待操作...</div>
+        </div>
     </div>
 
     <!-- PC端界面 -->
@@ -362,6 +366,21 @@
         let permissionGranted = false;
         let currentLang = 'zh-CN'; // 默认普通话
 
+        // 调试日志
+        function addDebugLog(msg) {
+            const debugContent = document.getElementById('debugContent');
+            const time = new Date().toLocaleTimeString();
+            debugContent.innerHTML = `[${time}] ${msg}<br>` + debugContent.innerHTML;
+            console.log(msg);
+        }
+
+        // 检查浏览器支持
+        if (!SpeechRecognition) {
+            addDebugLog('❌ 浏览器不支持语音识别');
+        } else {
+            addDebugLog('✅ 浏览器支持语音识别');
+        }
+
         // 语言选择
         document.getElementById('langSelect').addEventListener('change', (e) => {
             currentLang = e.target.value;
@@ -369,7 +388,7 @@
             if (recognition) {
                 recognition.lang = currentLang;
             }
-            console.log('语言已切换为:', currentLang);
+            addDebugLog('🌐 语言切换为: ' + currentLang);
         });
 
         // 初始化语音识别（延迟到用户首次点击）
@@ -390,29 +409,47 @@
 
                 recognition.onstart = () => {
                     permissionGranted = true;
-                    console.log('语音识别已启动，语言:', recognition.lang);
+                    addDebugLog('🎤 识别已启动，语言: ' + recognition.lang);
                 };
 
                 recognition.onresult = (event) => {
+                    addDebugLog('📝 收到识别结果');
                     let transcript = '';
                     for (let i = event.resultIndex; i < event.results.length; i++) {
-                        transcript += event.results[i][0].transcript;
+                        const result = event.results[i];
+                        transcript += result[0].transcript;
+                        addDebugLog(`结果: "${result[0].transcript}" (置信度: ${result[0].confidence.toFixed(2)})`);
                     }
-                    document.getElementById('textDisplay').textContent = transcript;
+                    
+                    if (transcript) {
+                        document.getElementById('textDisplay').textContent = transcript;
+                        addDebugLog('✅ 显示文本: ' + transcript);
+                    }
+                    
                     if (event.results[event.results.length - 1].isFinal) {
                         document.getElementById('statusText').textContent = '识别完成！';
+                    } else {
+                        document.getElementById('statusText').textContent = '识别中...';
                     }
                 };
 
                 recognition.onerror = (event) => {
-                    console.error('识别错误:', event.error);
+                    addDebugLog('❌ 错误: ' + event.error);
                     let errorMsg = '识别失败，请重试';
-                    if (event.error === 'not-allowed') {
-                        errorMsg = '请允许麦克风权限';
+                    if (event.error === 'not-allowed' || event.error === 'permission-denied') {
+                        errorMsg = '❌ 请允许麦克风权限';
                     } else if (event.error === 'no-speech') {
-                        errorMsg = '未检测到语音，请重试';
+                        errorMsg = '⚠️ 未检测到语音，请大声说话';
                     } else if (event.error === 'network') {
-                        errorMsg = '网络错误，请检查连接';
+                        errorMsg = '❌ 网络错误，请检查连接';
+                    } else if (event.error === 'aborted') {
+                        errorMsg = '⚠️ 识别被中断';
+                    } else if (event.error === 'audio-capture') {
+                        errorMsg = '❌ 麦克风无法使用';
+                    } else if (event.error === 'service-not-allowed') {
+                        errorMsg = '❌ 语音服务不可用';
+                    } else {
+                        errorMsg = `❌ 错误: ${event.error}`;
                     }
                     document.getElementById('statusText').textContent = errorMsg;
                     isRecording = false;
@@ -422,7 +459,14 @@
                 recognition.onend = () => {
                     isRecording = false;
                     document.getElementById('recordBtn').classList.remove('recording');
-                    console.log('语音识别已结束');
+                    addDebugLog('⏹️ 识别已结束');
+                    
+                    // 检查是否有识别结果
+                    const text = document.getElementById('textDisplay').textContent;
+                    if (!text || text === '识别的文字将显示在这里...') {
+                        document.getElementById('statusText').textContent = '⚠️ 未识别到内容，请重试';
+                        addDebugLog('⚠️ 没有识别到任何内容');
+                    }
                 };
             }
         }
@@ -432,22 +476,41 @@
         
         // 使用点击事件代替按住（iOS兼容性更好）
         let clickStartTime = 0;
+        let touchTimeout = null;
         
         recordBtn.addEventListener('touchstart', (e) => {
             e.preventDefault();
             clickStartTime = Date.now();
-            startRecording();
+            
+            // 延迟启动，确保是长按
+            touchTimeout = setTimeout(() => {
+                startRecording();
+            }, 100);
         });
         
         recordBtn.addEventListener('touchend', (e) => {
             e.preventDefault();
+            
+            // 清除延迟启动
+            if (touchTimeout) {
+                clearTimeout(touchTimeout);
+            }
+            
             const duration = Date.now() - clickStartTime;
+            console.log('按住时长:', duration, 'ms');
+            addDebugLog(`⏱️ 按住时长: ${duration}ms`);
+            
             // 如果按住时间太短，提示用户
-            if (duration < 500) {
-                document.getElementById('statusText').textContent = '请按住按钮说话';
+            if (duration < 300) {
+                document.getElementById('statusText').textContent = '⚠️ 请按住按钮说话（至少0.5秒）';
                 if (recognition && isRecording) {
                     recognition.stop();
                 }
+            } else if (duration < 1000) {
+                // 按住时间较短，提示可能需要说更久
+                setTimeout(() => {
+                    stopRecording();
+                }, 500); // 给一点额外时间
             } else {
                 stopRecording();
             }
@@ -491,8 +554,10 @@
                 
                 recognition.start();
                 console.log('开始识别，语言:', currentLang);
+                addDebugLog('▶️ 开始识别，语言: ' + currentLang);
             } catch (error) {
                 console.error('启动识别失败:', error);
+                addDebugLog('❌ 启动失败: ' + error.message);
                 document.getElementById('statusText').textContent = '启动失败，请重试';
                 isRecording = false;
                 recordBtn.classList.remove('recording');
