@@ -312,14 +312,6 @@
         <button class="record-button" id="recordBtn">🎤</button>
         <div class="status-text" id="statusText">点击按钮开始录音</div>
         <div class="text-display" id="textDisplay">识别的文字将显示在这里...</div>
-        <div style="margin-bottom: 15px;">
-            <select id="langSelect" style="padding: 10px; border-radius: 8px; border: 2px solid white; background: rgba(255,255,255,0.9); font-size: 14px; cursor: pointer;">
-                <option value="zh-CN">🇨🇳 普通话</option>
-                <option value="zh-HK">🇭🇰 粤语</option>
-                <option value="zh-TW">🇹🇼 台湾国语</option>
-                <option value="en-US">🇺🇸 English</option>
-            </select>
-        </div>
         <div class="button-group">
             <button class="action-button save-button" id="saveBtn">✅ 保存备忘录</button>
             <button class="action-button cancel-button" id="cancelBtn">❌ 取消</button>
@@ -381,16 +373,6 @@
         } else {
             addDebugLog('✅ 浏览器支持语音识别');
         }
-
-        // 语言选择
-        document.getElementById('langSelect').addEventListener('change', (e) => {
-            currentLang = e.target.value;
-            // 如果已经初始化过，需要重新设置语言
-            if (recognition) {
-                recognition.lang = currentLang;
-            }
-            addDebugLog('🌐 语言切换为: ' + currentLang);
-        });
 
         // 初始化语音识别（延迟到用户首次点击）
         function initRecognition() {
