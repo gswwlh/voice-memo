@@ -312,6 +312,14 @@
         <button class="record-button" id="recordBtn">🎤</button>
         <div class="status-text" id="statusText">按住按钮开始录音</div>
         <div class="text-display" id="textDisplay">识别的文字将显示在这里...</div>
+        <div style="margin-bottom: 15px;">
+            <select id="langSelect" style="padding: 10px; border-radius: 8px; border: 2px solid white; background: rgba(255,255,255,0.9); font-size: 14px; cursor: pointer;">
+                <option value="zh-CN">🇨🇳 普通话</option>
+                <option value="zh-HK">🇭🇰 粤语</option>
+                <option value="zh-TW">🇹🇼 台湾国语</option>
+                <option value="en-US">🇺🇸 English</option>
+            </select>
+        </div>
         <div class="button-group">
             <button class="action-button save-button" id="saveBtn">✅ 保存备忘录</button>
             <button class="action-button cancel-button" id="cancelBtn">❌ 取消</button>
@@ -351,62 +359,161 @@
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         let recognition = null;
         let isRecording = false;
+        let permissionGranted = false;
+        let currentLang = 'zh-CN'; // 默认普通话
 
-        // 初始化语音识别
-        if (SpeechRecognition) {
-            recognition = new SpeechRecognition();
-            recognition.lang = 'zh-CN';
-            recognition.continuous = false;
-            recognition.interimResults = false;
+        // 语言选择
+        document.getElementById('langSelect').addEventListener('change', (e) => {
+            currentLang = e.target.value;
+            // 如果已经初始化过，需要重新设置语言
+            if (recognition) {
+                recognition.lang = currentLang;
+            }
+            console.log('语言已切换为:', currentLang);
+        });
 
-            recognition.onresult = (event) => {
-                const transcript = event.results[0][0].transcript;
-                document.getElementById('textDisplay').textContent = transcript;
-                document.getElementById('statusText').textContent = '识别完成！';
-            };
+        // 初始化语音识别（延迟到用户首次点击）
+        function initRecognition() {
+            if (!recognition && SpeechRecognition) {
+                recognition = new SpeechRecognition();
+                // 使用当前选择的语言
+                recognition.lang = currentLang;
+                recognition.continuous = false;
+                recognition.interimResults = true;
+                recognition.maxAlternatives = 1;
+                
+                // iOS Safari特殊处理
+                if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
+                    recognition.continuous = false;
+                    recognition.interimResults = false; // iOS上interimResults可能不稳定
+                }
 
-            recognition.onerror = (event) => {
-                console.error('识别错误:', event.error);
-                document.getElementById('statusText').textContent = '识别失败，请重试';
-            };
+                recognition.onstart = () => {
+                    permissionGranted = true;
+                    console.log('语音识别已启动，语言:', recognition.lang);
+                };
 
-            recognition.onend = () => {
-                isRecording = false;
-                document.getElementById('recordBtn').classList.remove('recording');
-            };
+                recognition.onresult = (event) => {
+                    let transcript = '';
+                    for (let i = event.resultIndex; i < event.results.length; i++) {
+                        transcript += event.results[i][0].transcript;
+                    }
+                    document.getElementById('textDisplay').textContent = transcript;
+                    if (event.results[event.results.length - 1].isFinal) {
+                        document.getElementById('statusText').textContent = '识别完成！';
+                    }
+                };
+
+                recognition.onerror = (event) => {
+                    console.error('识别错误:', event.error);
+                    let errorMsg = '识别失败，请重试';
+                    if (event.error === 'not-allowed') {
+                        errorMsg = '请允许麦克风权限';
+                    } else if (event.error === 'no-speech') {
+                        errorMsg = '未检测到语音，请重试';
+                    } else if (event.error === 'network') {
+                        errorMsg = '网络错误，请检查连接';
+                    }
+                    document.getElementById('statusText').textContent = errorMsg;
+                    isRecording = false;
+                    document.getElementById('recordBtn').classList.remove('recording');
+                };
+
+                recognition.onend = () => {
+                    isRecording = false;
+                    document.getElementById('recordBtn').classList.remove('recording');
+                    console.log('语音识别已结束');
+                };
+            }
         }
 
         // 移动端：录音按钮
         const recordBtn = document.getElementById('recordBtn');
-        recordBtn.addEventListener('mousedown', startRecording);
-        recordBtn.addEventListener('touchstart', startRecording);
-        recordBtn.addEventListener('mouseup', stopRecording);
-        recordBtn.addEventListener('touchend', stopRecording);
-
-        function startRecording(e) {
+        
+        // 使用点击事件代替按住（iOS兼容性更好）
+        let clickStartTime = 0;
+        
+        recordBtn.addEventListener('touchstart', (e) => {
             e.preventDefault();
-            if (!recognition) {
-                alert('您的浏览器不支持语音识别');
+            clickStartTime = Date.now();
+            startRecording();
+        });
+        
+        recordBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            const duration = Date.now() - clickStartTime;
+            // 如果按住时间太短，提示用户
+            if (duration < 500) {
+                document.getElementById('statusText').textContent = '请按住按钮说话';
+                if (recognition && isRecording) {
+                    recognition.stop();
+                }
+            } else {
+                stopRecording();
+            }
+        });
+
+        // PC端支持
+        recordBtn.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            clickStartTime = Date.now();
+            startRecording();
+        });
+        
+        recordBtn.addEventListener('mouseup', (e) => {
+            e.preventDefault();
+            stopRecording();
+        });
+
+        function startRecording() {
+            if (!SpeechRecognition) {
+                alert('您的浏览器不支持语音识别\n\niOS请使用Safari浏览器\nAndroid请使用Chrome浏览器');
                 return;
             }
-            isRecording = true;
-            recordBtn.classList.add('recording');
-            document.getElementById('statusText').textContent = '正在录音...';
-            recognition.start();
+            
+            // 首次使用时初始化
+            if (!recognition) {
+                initRecognition();
+            }
+            
+            if (isRecording) return;
+            
+            try {
+                isRecording = true;
+                recordBtn.classList.add('recording');
+                document.getElementById('statusText').textContent = '正在录音...';
+                document.getElementById('textDisplay').textContent = '';
+                
+                // 确保使用最新的语言设置
+                if (recognition) {
+                    recognition.lang = currentLang;
+                }
+                
+                recognition.start();
+                console.log('开始识别，语言:', currentLang);
+            } catch (error) {
+                console.error('启动识别失败:', error);
+                document.getElementById('statusText').textContent = '启动失败，请重试';
+                isRecording = false;
+                recordBtn.classList.remove('recording');
+            }
         }
 
-        function stopRecording(e) {
-            e.preventDefault();
+        function stopRecording() {
             if (isRecording && recognition) {
-                recognition.stop();
-                document.getElementById('statusText').textContent = '识别中...';
+                try {
+                    recognition.stop();
+                    document.getElementById('statusText').textContent = '识别中...';
+                } catch (error) {
+                    console.error('停止识别失败:', error);
+                }
             }
         }
 
         // 保存备忘录
         document.getElementById('saveBtn').addEventListener('click', () => {
-            const text = document.getElementById('textDisplay').textContent;
-            if (text && text !== '识别的文字将显示在这里...') {
+            const text = document.getElementById('textDisplay').textContent.trim();
+            if (text && text !== '识别的文字将显示在这里...' && text !== '') {
                 const memo = {
                     id: Date.now(),
                     text: text,
@@ -415,15 +522,23 @@
                 };
                 saveMemo(memo);
                 document.getElementById('textDisplay').textContent = '识别的文字将显示在这里...';
-                document.getElementById('statusText').textContent = '保存成功！';
+                document.getElementById('statusText').textContent = '✅ 保存成功！';
                 updateMemoCount();
+                setTimeout(() => {
+                    document.getElementById('statusText').textContent = '按住按钮开始录音';
+                }, 2000);
+            } else {
+                document.getElementById('statusText').textContent = '没有内容可保存';
             }
         });
 
         // 取消
         document.getElementById('cancelBtn').addEventListener('click', () => {
             document.getElementById('textDisplay').textContent = '识别的文字将显示在这里...';
-            document.getElementById('statusText').textContent = '已取消';
+            document.getElementById('statusText').textContent = '按住按钮开始录音';
+            if (isRecording && recognition) {
+                recognition.stop();
+            }
         });
 
         // 本地存储
