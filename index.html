@@ -478,21 +478,20 @@
         // 移动端：录音按钮 - 改为点击切换模式
         const recordBtn = document.getElementById('recordBtn');
         
-        // 点击切换录音状态
+        // 统一使用click事件
         recordBtn.addEventListener('click', (e) => {
             e.preventDefault();
+            e.stopPropagation();
+            
+            addDebugLog('🖱️ 按钮被点击');
+            
             if (isRecording) {
+                addDebugLog('⏸️ 当前正在录音，准备停止');
                 stopRecording();
             } else {
+                addDebugLog('▶️ 当前未录音，准备开始');
                 startRecording();
             }
-        });
-        
-        // 触摸事件（移动端）
-        recordBtn.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            // 防止触发两次
-            e.stopPropagation();
         });
 
         function startRecording() {
