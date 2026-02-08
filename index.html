@@ -365,6 +365,7 @@
         let isRecording = false;
         let permissionGranted = false;
         let currentLang = 'zh-CN'; // 默认普通话
+        let finalTranscriptGlobal = ''; // 全局保存最终结果
 
         // 调试日志
         function addDebugLog(msg) {
@@ -397,46 +398,40 @@
                 recognition = new SpeechRecognition();
                 // 使用当前选择的语言
                 recognition.lang = currentLang;
-                recognition.continuous = false; // 改回非连续模式
+                recognition.continuous = true; // 连续模式，不会因为停顿而中断
                 recognition.interimResults = true; // 保留实时结果
                 recognition.maxAlternatives = 1;
 
                 recognition.onstart = () => {
                     permissionGranted = true;
+                    finalTranscriptGlobal = ''; // 重置全局结果
                     addDebugLog('🎤 识别已启动，语言: ' + recognition.lang);
                 };
 
                 recognition.onresult = (event) => {
-                    addDebugLog('📝 收到识别结果');
-                    let finalTranscript = '';
                     let interimTranscript = '';
                     
-                    // 遍历所有结果
-                    for (let i = 0; i < event.results.length; i++) {
+                    // 从resultIndex开始遍历新结果
+                    for (let i = event.resultIndex; i < event.results.length; i++) {
                         const result = event.results[i];
                         const transcript = result[0].transcript;
                         
                         if (result.isFinal) {
-                            finalTranscript += transcript;
+                            // 最终结果，累积到全局变量
+                            finalTranscriptGlobal += transcript;
                             addDebugLog(`✅ 最终: "${transcript}"`);
                         } else {
+                            // 临时结果
                             interimTranscript += transcript;
                         }
                     }
                     
-                    // 显示结果（最终结果 + 临时结果）
-                    const displayText = finalTranscript || interimTranscript;
-                    
-                    if (displayText) {
-                        if (finalTranscript) {
-                            // 最终结果，纯文本
-                            document.getElementById('textDisplay').textContent = finalTranscript;
-                        } else {
-                            // 临时结果，灰色显示
-                            document.getElementById('textDisplay').innerHTML = 
-                                '<span style="color: #999;">' + interimTranscript + '</span>';
-                        }
-                        addDebugLog('显示: ' + displayText);
+                    // 显示：已确定的文本 + 临时文本（灰色）
+                    if (interimTranscript) {
+                        document.getElementById('textDisplay').innerHTML = 
+                            finalTranscriptGlobal + '<span style="color: #999;">' + interimTranscript + '</span>';
+                    } else {
+                        document.getElementById('textDisplay').textContent = finalTranscriptGlobal;
                     }
                 };
 
@@ -470,24 +465,19 @@
                     document.getElementById('recordBtn').textContent = '🎤'; // 恢复麦克风图标
                     addDebugLog('⏹️ 识别已结束');
                     
-                    // 检查是否有识别结果
+                    // 使用全局保存的最终结果
                     const textDisplay = document.getElementById('textDisplay');
-                    let text = textDisplay.textContent.trim();
                     
-                    // 清理临时样式，获取纯文本
-                    if (textDisplay.innerHTML.includes('<span')) {
-                        const tempDiv = document.createElement('div');
-                        tempDiv.innerHTML = textDisplay.innerHTML;
-                        text = tempDiv.textContent.trim();
-                        textDisplay.textContent = text;
-                    }
+                    // 清理临时样式，显示最终文本
+                    textDisplay.textContent = finalTranscriptGlobal;
                     
-                    if (!text || text === '识别的文字将显示在这里...') {
+                    if (!finalTranscriptGlobal || finalTranscriptGlobal.trim() === '') {
                         document.getElementById('statusText').textContent = '⚠️ 未识别到内容，请重试';
                         addDebugLog('⚠️ 没有识别到任何内容');
+                        textDisplay.textContent = '识别的文字将显示在这里...';
                     } else {
                         document.getElementById('statusText').textContent = '✅ 识别完成！可以保存了';
-                        addDebugLog('✅ 最终文本: ' + text);
+                        addDebugLog('✅ 最终文本: ' + finalTranscriptGlobal);
                     }
                 };
             }
@@ -531,6 +521,9 @@
                 recordBtn.textContent = '⏹️'; // 改为停止图标
                 document.getElementById('statusText').textContent = '🎤 正在录音... (点击停止)';
                 document.getElementById('textDisplay').textContent = '';
+                
+                // 重置全局结果
+                finalTranscriptGlobal = '';
                 
                 // 确保使用最新的语言设置
                 if (recognition) {
