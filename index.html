@@ -310,7 +310,7 @@
     <div class="mobile-container">
         <h1 class="mobile-title">🎤 语音备忘录</h1>
         <button class="record-button" id="recordBtn">🎤</button>
-        <div class="status-text" id="statusText">按住按钮开始录音</div>
+        <div class="status-text" id="statusText">点击按钮开始录音</div>
         <div class="text-display" id="textDisplay">识别的文字将显示在这里...</div>
         <div style="margin-bottom: 15px;">
             <select id="langSelect" style="padding: 10px; border-radius: 8px; border: 2px solid white; background: rgba(255,255,255,0.9); font-size: 14px; cursor: pointer;">
@@ -454,78 +454,45 @@
                     document.getElementById('statusText').textContent = errorMsg;
                     isRecording = false;
                     document.getElementById('recordBtn').classList.remove('recording');
+                    document.getElementById('recordBtn').textContent = '🎤';
                 };
 
                 recognition.onend = () => {
                     isRecording = false;
                     document.getElementById('recordBtn').classList.remove('recording');
+                    document.getElementById('recordBtn').textContent = '🎤'; // 恢复麦克风图标
                     addDebugLog('⏹️ 识别已结束');
                     
                     // 检查是否有识别结果
                     const text = document.getElementById('textDisplay').textContent;
-                    if (!text || text === '识别的文字将显示在这里...') {
+                    if (!text || text === '识别的文字将显示在这里...' || text === '') {
                         document.getElementById('statusText').textContent = '⚠️ 未识别到内容，请重试';
                         addDebugLog('⚠️ 没有识别到任何内容');
+                    } else {
+                        document.getElementById('statusText').textContent = '✅ 识别完成！';
                     }
                 };
             }
         }
 
-        // 移动端：录音按钮
+        // 移动端：录音按钮 - 改为点击切换模式
         const recordBtn = document.getElementById('recordBtn');
         
-        // 使用点击事件代替按住（iOS兼容性更好）
-        let clickStartTime = 0;
-        let touchTimeout = null;
-        
-        recordBtn.addEventListener('touchstart', (e) => {
+        // 点击切换录音状态
+        recordBtn.addEventListener('click', (e) => {
             e.preventDefault();
-            clickStartTime = Date.now();
-            
-            // 延迟启动，确保是长按
-            touchTimeout = setTimeout(() => {
+            if (isRecording) {
+                stopRecording();
+            } else {
                 startRecording();
-            }, 100);
+            }
         });
         
+        // 触摸事件（移动端）
         recordBtn.addEventListener('touchend', (e) => {
             e.preventDefault();
-            
-            // 清除延迟启动
-            if (touchTimeout) {
-                clearTimeout(touchTimeout);
-            }
-            
-            const duration = Date.now() - clickStartTime;
-            console.log('按住时长:', duration, 'ms');
-            addDebugLog(`⏱️ 按住时长: ${duration}ms`);
-            
-            // 如果按住时间太短，提示用户
-            if (duration < 300) {
-                document.getElementById('statusText').textContent = '⚠️ 请按住按钮说话（至少0.5秒）';
-                if (recognition && isRecording) {
-                    recognition.stop();
-                }
-            } else if (duration < 1000) {
-                // 按住时间较短，提示可能需要说更久
-                setTimeout(() => {
-                    stopRecording();
-                }, 500); // 给一点额外时间
-            } else {
-                stopRecording();
-            }
-        });
-
-        // PC端支持
-        recordBtn.addEventListener('mousedown', (e) => {
-            e.preventDefault();
-            clickStartTime = Date.now();
-            startRecording();
-        });
-        
-        recordBtn.addEventListener('mouseup', (e) => {
-            e.preventDefault();
-            stopRecording();
+            // 防止触发两次
+            e.stopPropagation();
         });
 
         function startRecording() {
@@ -544,7 +511,8 @@
             try {
                 isRecording = true;
                 recordBtn.classList.add('recording');
-                document.getElementById('statusText').textContent = '正在录音...';
+                recordBtn.textContent = '⏹️'; // 改为停止图标
+                document.getElementById('statusText').textContent = '🎤 正在录音... (点击停止)';
                 document.getElementById('textDisplay').textContent = '';
                 
                 // 确保使用最新的语言设置
@@ -553,7 +521,6 @@
                 }
                 
                 recognition.start();
-                console.log('开始识别，语言:', currentLang);
                 addDebugLog('▶️ 开始识别，语言: ' + currentLang);
             } catch (error) {
                 console.error('启动识别失败:', error);
@@ -561,6 +528,7 @@
                 document.getElementById('statusText').textContent = '启动失败，请重试';
                 isRecording = false;
                 recordBtn.classList.remove('recording');
+                recordBtn.textContent = '🎤';
             }
         }
 
@@ -568,9 +536,11 @@
             if (isRecording && recognition) {
                 try {
                     recognition.stop();
-                    document.getElementById('statusText').textContent = '识别中...';
+                    document.getElementById('statusText').textContent = '⏳ 识别中，请稍候...';
+                    addDebugLog('⏸️ 停止录音，等待识别结果');
                 } catch (error) {
                     console.error('停止识别失败:', error);
+                    addDebugLog('❌ 停止失败: ' + error.message);
                 }
             }
         }
@@ -600,7 +570,7 @@
         // 取消
         document.getElementById('cancelBtn').addEventListener('click', () => {
             document.getElementById('textDisplay').textContent = '识别的文字将显示在这里...';
-            document.getElementById('statusText').textContent = '按住按钮开始录音';
+            document.getElementById('statusText').textContent = '点击按钮开始录音';
             if (isRecording && recognition) {
                 recognition.stop();
             }
