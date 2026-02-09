@@ -355,6 +355,16 @@
         // 等待Supabase库加载
         let supabase = null;
         
+        // 调试日志（提前定义）
+        function addDebugLog(msg) {
+            const debugContent = document.getElementById('debugContent');
+            if (debugContent) {
+                const time = new Date().toLocaleTimeString();
+                debugContent.innerHTML = `[${time}] ${msg}<br>` + debugContent.innerHTML;
+            }
+            console.log(msg);
+        }
+        
         // 初始化Supabase
         function initSupabase() {
             if (window.supabase) {
@@ -362,8 +372,10 @@
                 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR3ZXVzbmxxbGdpaXVjaGxmYmRyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzNjkxMjksImV4cCI6MjA4NTk0NTEyOX0.3-JvqUMlHigtjwcGHZDdaOhvwq1dDLeoqn2A0gxXNPg';
                 supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
                 addDebugLog('✅ Supabase已连接');
+                return true;
             } else {
                 addDebugLog('❌ Supabase库加载失败');
+                return false;
             }
         }
 
@@ -374,14 +386,6 @@
         let permissionGranted = false;
         let currentLang = 'zh-CN'; // 默认普通话
         let finalTranscriptGlobal = ''; // 全局保存最终结果
-
-        // 调试日志
-        function addDebugLog(msg) {
-            const debugContent = document.getElementById('debugContent');
-            const time = new Date().toLocaleTimeString();
-            debugContent.innerHTML = `[${time}] ${msg}<br>` + debugContent.innerHTML;
-            console.log(msg);
-        }
 
         // 检查浏览器支持
         if (!SpeechRecognition) {
