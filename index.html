@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>语音备忘录</title>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         * {
             margin: 0;
@@ -352,9 +351,6 @@
     </div>
 
     <script>
-        // 等待Supabase库加载
-        let supabase = null;
-        
         // 调试日志（提前定义）
         function addDebugLog(msg) {
             const debugContent = document.getElementById('debugContent');
@@ -363,20 +359,6 @@
                 debugContent.innerHTML = `[${time}] ${msg}<br>` + debugContent.innerHTML;
             }
             console.log(msg);
-        }
-        
-        // 初始化Supabase
-        function initSupabase() {
-            if (window.supabase) {
-                const SUPABASE_URL = 'https://tweusnlqlgiiuchlfbdr.supabase.co';
-                const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR3ZXVzbmxxbGdpaXVjaGxmYmRyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzNjkxMjksImV4cCI6MjA4NTk0NTEyOX0.3-JvqUMlHigtjwcGHZDdaOhvwq1dDLeoqn2A0gxXNPg';
-                supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-                addDebugLog('✅ Supabase已连接');
-                return true;
-            } else {
-                addDebugLog('❌ Supabase库加载失败');
-                return false;
-            }
         }
 
         // 语音识别
@@ -566,7 +548,7 @@
         }
 
         // 保存备忘录
-        document.getElementById('saveBtn').addEventListener('click', async () => {
+        document.getElementById('saveBtn').addEventListener('click', () => {
             const text = document.getElementById('textDisplay').textContent.trim();
             if (text && text !== '识别的文字将显示在这里...' && text !== '') {
                 const memo = {
@@ -576,18 +558,13 @@
                     word_count: text.length
                 };
                 
-                const success = await saveMemo(memo);
-                
-                if (success) {
-                    document.getElementById('textDisplay').textContent = '识别的文字将显示在这里...';
-                    document.getElementById('statusText').textContent = '✅ 保存成功！';
-                    updateMemoCount();
-                    setTimeout(() => {
-                        document.getElementById('statusText').textContent = '点击按钮开始录音';
-                    }, 2000);
-                } else {
-                    document.getElementById('statusText').textContent = '❌ 保存失败，请重试';
-                }
+                saveMemo(memo);
+                document.getElementById('textDisplay').textContent = '识别的文字将显示在这里...';
+                document.getElementById('statusText').textContent = '✅ 保存成功！';
+                updateMemoCount();
+                setTimeout(() => {
+                    document.getElementById('statusText').textContent = '点击按钮开始录音';
+                }, 2000);
             } else {
                 document.getElementById('statusText').textContent = '没有内容可保存';
             }
@@ -602,106 +579,43 @@
             }
         });
 
-        // Supabase数据库操作
-        async function saveMemo(memo) {
-            if (!supabase) {
-                addDebugLog('❌ Supabase未初始化');
-                return false;
-            }
-            
-            try {
-                const { data, error } = await supabase
-                    .from('voice_memos')
-                    .insert([memo]);
-                
-                if (error) {
-                    console.error('保存失败:', error);
-                    addDebugLog('❌ 保存到云端失败: ' + error.message);
-                    return false;
-                }
-                
-                addDebugLog('✅ 已保存到云端');
-                return true;
-            } catch (err) {
-                console.error('保存异常:', err);
-                addDebugLog('❌ 保存异常: ' + err.message);
-                return false;
-            }
+        // 本地存储
+        function saveMemo(memo) {
+            const memos = getMemos();
+            memos.unshift(memo);
+            localStorage.setItem('voiceMemos', JSON.stringify(memos));
         }
 
-        async function getMemos() {
-            try {
-                const { data, error } = await supabase
-                    .from('voice_memos')
-                    .select('*')
-                    .order('timestamp', { ascending: false });
-                
-                if (error) {
-                    console.error('获取失败:', error);
-                    return [];
-                }
-                
-                return data || [];
-            } catch (err) {
-                console.error('获取异常:', err);
-                return [];
-            }
+        function getMemos() {
+            const data = localStorage.getItem('voiceMemos');
+            return data ? JSON.parse(data) : [];
         }
 
-        async function deleteMemo(id) {
-            try {
-                const { error } = await supabase
-                    .from('voice_memos')
-                    .delete()
-                    .eq('id', id);
-                
-                if (error) {
-                    console.error('删除失败:', error);
-                    alert('删除失败，请重试');
-                    return;
-                }
-                
-                await renderMemos();
-                await updateStats();
-            } catch (err) {
-                console.error('删除异常:', err);
-                alert('删除失败，请重试');
-            }
+        function deleteMemo(id) {
+            const memos = getMemos().filter(m => m.id !== id);
+            localStorage.setItem('voiceMemos', JSON.stringify(memos));
+            renderMemos();
+            updateStats();
         }
 
-        async function clearAllMemos() {
+        function clearAllMemos() {
             if (confirm('确定要清空所有备忘录吗？')) {
-                try {
-                    const { error } = await supabase
-                        .from('voice_memos')
-                        .delete()
-                        .neq('id', 0); // 删除所有记录
-                    
-                    if (error) {
-                        console.error('清空失败:', error);
-                        alert('清空失败，请重试');
-                        return;
-                    }
-                    
-                    await renderMemos();
-                    await updateStats();
-                } catch (err) {
-                    console.error('清空异常:', err);
-                    alert('清空失败，请重试');
-                }
+                localStorage.removeItem('voiceMemos');
+                renderMemos();
+                updateStats();
             }
         }
 
         // 更新移动端计数
-        async function updateMemoCount() {
-            const memos = await getMemos();
+        function updateMemoCount() {
+            const memos = getMemos();
             const count = memos.length;
             document.getElementById('memoCount').textContent = `已保存 ${count} 条备忘录`;
         }
 
         // PC端：渲染备忘录
-        async function renderMemos(filter = '') {
-            const memos = await getMemos();
+        function renderMemos(filter = '') {
+            const memos = getMemos();
             const grid = document.getElementById('memosGrid');
             const filtered = filter ? memos.filter(m => m.text.includes(filter)) : memos;
 
@@ -726,8 +640,8 @@
         }
 
         // 复制备忘录
-        async function copyMemo(id) {
-            const memos = await getMemos();
+        function copyMemo(id) {
+            const memos = getMemos();
             const memo = memos.find(m => m.id == id);
             if (memo) {
                 navigator.clipboard.writeText(memo.text).then(() => {
@@ -737,8 +651,8 @@
         }
 
         // 导出
-        document.getElementById('exportBtn').addEventListener('click', async () => {
-            const memos = await getMemos();
+        document.getElementById('exportBtn').addEventListener('click', () => {
+            const memos = getMemos();
             const dataStr = JSON.stringify(memos, null, 2);
             const blob = new Blob([dataStr], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
@@ -757,8 +671,8 @@
         });
 
         // 更新统计
-        async function updateStats() {
-            const memos = await getMemos();
+        function updateStats() {
+            const memos = getMemos();
             const today = new Date().toDateString();
             const todayMemos = memos.filter(m => new Date(m.timestamp).toDateString() === today);
             const totalWords = memos.reduce((sum, m) => sum + m.word_count, 0);
@@ -769,12 +683,9 @@
         }
 
         // 初始化
-        window.addEventListener('load', () => {
-            initSupabase();
-            updateMemoCount();
-            renderMemos();
-            updateStats();
-        });
+        updateMemoCount();
+        renderMemos();
+        updateStats();
     </script>
 </body>
 </html>
